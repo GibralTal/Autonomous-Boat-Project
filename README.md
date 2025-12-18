@@ -1,4 +1,4 @@
-# Autonomous Boat Control System 🚤
+# Autonomous Boat Control System
 
 This project implements a control system for an autonomous boat, bridging high-level logic (NVIDIA Jetson Orin) with low-level actuation (Arduino Nano).
 
