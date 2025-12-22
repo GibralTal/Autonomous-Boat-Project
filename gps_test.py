@@ -2,7 +2,7 @@ import serial
 import pynmea2
 import time
 
-# הגדרות פורט (בדרך כלל ttyACM1 אם הארדואינו הוא ACM0)
+# Port settings (Usually ttyACM1 if the Arduino is on ACM0)
 GPS_PORT = '/dev/ttyACM1'
 BAUD_RATE = 9600
 
@@ -17,11 +17,11 @@ def main():
         while True:
             line = ser.readline().decode('utf-8', errors='ignore')
             
-            # חיפוש הודעות מיקום (GNRMC או GNGGA)
+            # Check for location messages (GNRMC or GNGGA)
             if line.startswith('$GNRMC') or line.startswith('$GNGGA'):
                 try:
                     msg = pynmea2.parse(line)
-                    # הדפסה רק אם יש נעילה
+                    # Print only if there is a valid GPS fix
                     if hasattr(msg, 'latitude') and float(msg.latitude) != 0.0:
                         print(f" CURRENT LOCATION:")
                         print(f"LAT: {msg.latitude}")
