@@ -35,7 +35,7 @@ Update the navigation logic with the coordinates obtained in Phase 1.
 1.  **Edit Configuration:**
     Open the main navigation script:
     ```bash
-    nano simple_nav.py
+    nano simple_gps_nav.py
     ```
 2.  **Update Waypoints:**
     Locate the configuration section at the top of the file. Replace the existing values with the new coordinates:
@@ -56,7 +56,7 @@ Update the navigation logic with the coordinates obtained in Phase 1.
 2.  **Execution:**
     Run the autonomous navigation mission:
     ```bash
-    sudo python3 simple_nav.py
+    sudo python3 simple_gps_nav.py
     ```
 3.  **Monitoring:**
     Monitor the terminal output for telemetry:
