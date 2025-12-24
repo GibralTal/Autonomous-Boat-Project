@@ -5,10 +5,10 @@ import time
 
 # --- Connection Setup ---
 # Ensure ports are correct!
-GPS_PORT = '/dev/ttyACM1'      # GPS Serial Port
-ARDUINO_PORT = '/dev/ttyACM0'  # Arduino Serial Port
+GPS_PORT = '/dev/ttyACM0'      # GPS Serial Port
+ARDUINO_PORT = '/dev/ttyACM1'  # Arduino Serial Port
 BAUD_RATE = 115200             # Arduino Baud Rate
-GPS_BAUD = 9600                # GPS Baud Rate
+GPS_BAUD = 115200                # GPS Baud Rate
 
 # --- Mission Configuration (Target Waypoint) ---
 # Update these coordinates to your desired target location.
