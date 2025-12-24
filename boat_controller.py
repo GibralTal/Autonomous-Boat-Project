@@ -10,7 +10,7 @@ import sys
 
 # Serial Configuration
 # Note: Use 'ls /dev/tty*' to find your correct port (ACM0 or USB0)
-ARDUINO_PORT = '/dev/ttyACM0' 
+ARDUINO_PORT = '/dev/ttyACM1' 
 BAUD_RATE = 115200
 
 def main():
