@@ -3,8 +3,8 @@ import pynmea2
 import time
 
 # Port settings (Usually ttyACM1 if the Arduino is on ACM0)
-GPS_PORT = '/dev/ttyACM1'
-BAUD_RATE = 9600
+GPS_PORT = '/dev/ttyACM0'
+BAUD_RATE = 115200
 
 def main():
     print(f"--- GPS Coordinate Finder ---")
@@ -16,7 +16,7 @@ def main():
         
         while True:
             line = ser.readline().decode('utf-8', errors='ignore')
-            
+            print(f"RAW DATA: {line.strip()}")
             # Check for location messages (GNRMC or GNGGA)
             if line.startswith('$GNRMC') or line.startswith('$GNGGA'):
                 try:
