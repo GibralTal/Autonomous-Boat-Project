@@ -1,133 +1,134 @@
 /*
- * Boat Control System V5.0 - RadioLink Manual Implementation
- * BASED ON RADIOLINK T8FB MANUAL
- * * IMPORTANT: Ensure Receiver R8EF LED is RED (PWM Mode).
- * Press binding button twice quickly to switch modes if Blue.
- * * WIRING:
- * Receiver CH1 (Right Stick Horizontal) -> Arduino D11
- * Receiver CH2 (Right Stick Vertical)   -> Arduino D12
- * Receiver CH4 (Left Stick Horizontal)  -> Arduino D6
- * Receiver CH5 (Switch)                 -> Arduino D7
+ * Boat Control System - FULL SPEED Autonomous (V22)
+ * Hardware: Arduino Nano 33 IoT
+ * Receiver: RadioLink R8EF (Red LED / PWM Mode)
+ *
+ * Update: Autonomous speeds set to MAX POWER.
  */
 
 #include <Servo.h>
 
-// --- כניסות (INPUTS) ---
-const int PIN_RX_SERVO  = 11; // CH1 - Aileron
-const int PIN_RX_MAIN   = 12; // CH2 - Elevator (Right Stick Up/Down)
-const int PIN_RX_MIDDLE = 6;  // CH4 - Rudder (Left Stick Left/Right)
-const int PIN_RX_MODE   = 7;  // CH5 - Switch
+// --- Input Pins ---
+const int PIN_IN_SERVO  = A0; 
+const int PIN_IN_MAIN   = A1; 
+const int PIN_IN_MIDDLE = A2; 
+const int PIN_IN_MODE   = A3; 
 
-// --- יציאות (OUTPUTS) ---
-const int PIN_ESC_LEFT   = 9;
-const int PIN_ESC_RIGHT  = 10;
-const int PIN_ESC_MIDDLE = 8; 
-const int PIN_SERVO      = 3;
+// --- Output Pins ---
+const int PIN_OUT_SERVO      = 3;
+const int PIN_OUT_MIDDLE     = 8;
+const int PIN_OUT_LEFT       = 9;
+const int PIN_OUT_RIGHT      = 10;
 
-// --- גבולות וכיול ---
-const int PWM_CENTER   = 1500;
-const int PWM_DEADZONE = 50;   // התעלמות מרעידות במרכז הסטיק
-const int SERVO_LEFT   = 60;   // זווית מקסימלית שמאלה
-const int SERVO_RIGHT  = 120;  // זווית מקסימלית ימינה
+// ==========================================
+// --- SPEED SETTINGS (MAX POWER EDITION) ---
+// ==========================================
+
+// 1. AUTONOMOUS SPEEDS (Set to 100% Power)
+// Previously these were 1350/1650 (Low Speed).
+// Now set to limits (1000/2000) for FULL SPEED.
+const int AUTO_SPEED_FWD  = 1000;  // Max Forward 'F'
+const int AUTO_SPEED_REV  = 2000;  // Max Backward 'B'
+
+// 2. AUTONOMOUS ROTATION SPEEDS
+const int AUTO_ROT_LEFT_PWM  = 2000; // Max Power Rotate Left 'Z'
+const int AUTO_ROT_RIGHT_PWM = 1000; // Max Power Rotate Right 'X'
+
+// 3. MANUAL SPEED LIMIT
+const int MANUAL_LIMIT_PCT = 100; // 100% Power from stick
+
+// 4. SERVO ANGLES
+const int ANGLE_TURN_LEFT  = 0;   
+const int ANGLE_TURN_RIGHT = 135;  
+const int ANGLE_CENTER     = 55;   
+
+// ==========================================
+
+// --- CALIBRATION ---
+const int DEADZONE = 50;       
+const int STICK_MIN = 1100;
+const int STICK_MAX = 1900;
 
 Servo escLeft;
 Servo escRight;
 Servo escMiddle;
 Servo myServo;
 
-// משתנים לשמירת ערכי השלט
-int valServo  = 0;
-int valMain   = 0;
-int valMiddle = 0;
-int valMode   = 0;
-
 void setup() {
   Serial.begin(115200);
-  Serial.println("--- Boat V5.0 (RadioLink Mapped) ---");
-  Serial.println("Verify R8EF LED is RED!");
 
-  pinMode(PIN_RX_SERVO, INPUT);
-  pinMode(PIN_RX_MAIN, INPUT);
-  pinMode(PIN_RX_MIDDLE, INPUT);
-  pinMode(PIN_RX_MODE, INPUT);
+  pinMode(PIN_IN_SERVO, INPUT);
+  pinMode(PIN_IN_MAIN, INPUT);
+  pinMode(PIN_IN_MIDDLE, INPUT);
+  pinMode(PIN_IN_MODE, INPUT);
 
-  escLeft.attach(PIN_ESC_LEFT);
-  escRight.attach(PIN_ESC_RIGHT);
-  escMiddle.attach(PIN_ESC_MIDDLE);
-  myServo.attach(PIN_SERVO);
+  escLeft.attach(PIN_OUT_LEFT);
+  escRight.attach(PIN_OUT_RIGHT);
+  escMiddle.attach(PIN_OUT_MIDDLE);
+  myServo.attach(PIN_OUT_SERVO);
 
   stopAll();
-  delay(1000);
+  Serial.println("System Ready - V22 (FULL SPEED AUTONOMOUS)");
 }
 
 void loop() {
-  // 1. קריאת ערוצים
-  valServo  = pulseIn(PIN_RX_SERVO, HIGH, 20000);
-  valMain   = pulseIn(PIN_RX_MAIN, HIGH, 20000);
-  valMiddle = pulseIn(PIN_RX_MIDDLE, HIGH, 20000);
-  valMode   = pulseIn(PIN_RX_MODE, HIGH, 20000);
+  int chServo  = pulseIn(PIN_IN_SERVO, HIGH);
+  int chMain   = pulseIn(PIN_IN_MAIN, HIGH);
+  int chMiddle = pulseIn(PIN_IN_MIDDLE, HIGH);
+  int chMode   = pulseIn(PIN_IN_MODE, HIGH);
 
-  // 2. דיאגנוסטיקה (הדפסה למסך לבדיקה)
-  // תפתח Serial Monitor ותראה אם המספרים משתנים נכון
-  static int c = 0;
-  if (c++ > 10) {
-    Serial.print("MODE: "); Serial.print(valMode > 1500 ? "AUTO" : "MANUAL");
-    Serial.print(" | MAIN(R-Vert): "); Serial.print(valMain);
-    Serial.print(" | MID(L-Horz): "); Serial.print(valMiddle);
-    Serial.print(" | SERVO(R-Horz): "); Serial.println(valServo);
-    c = 0;
-  }
-
-  // 3. החלטה ובקרה
-  if (valMode > 1500) {
-    runAutonomousLoop();
-  } else {
-    runManualLoop();
-  }
-  delay(10);
-}
-
-void runManualLoop() {
-  // הגנה: אם השלט כבוי (אין קריאות), עצור הכל
-  if (valMain < 800 && valMiddle < 800) {
+  if (chServo == 0 && chMain == 0) {
     stopAll();
     return;
   }
 
-  // --- שליטה במנועים ראשיים (סטיק ימני אנכי - CH2) ---
-  int mainSpeed = valMain;
-  if (abs(mainSpeed - 1500) < PWM_DEADZONE) mainSpeed = 1500;
-  
-  // אם הסטיק עובד הפוך (למעלה זה אחורה), תוריד את ההערה מהשורה הבאה:
-  // mainSpeed = map(valMain, 1000, 2000, 2000, 1000); 
-
-  escLeft.writeMicroseconds(mainSpeed);
-  escRight.writeMicroseconds(mainSpeed);
-
-  // --- שליטה בסרובו (סטיק ימני אופקי - CH1) ---
-  int servoAng = map(valServo, 1000, 2000, SERVO_LEFT, SERVO_RIGHT);
-  myServo.write(servoAng);
-
-  // --- שליטה במנוע אמצעי (סטיק שמאלי אופקי - CH4) ---
-  // ביקשת: שמאלה -> מנוע FORWARD
-  // הערה: בדרך כלל שמאלה = 1000, ימינה = 2000.
-  // מנוע: Forward = 1600-2000.
-  // לכן צריך מיפוי "הפוך": ערך נמוך בשלט -> ערך גבוה במנוע.
-  
-  int midSpeed = 1500;
-  
-  if (valMiddle < (1500 - PWM_DEADZONE)) {
-     // סטיק שמאלה (ערך נמוך) -> סע קדימה
-     // ממירים את הטווח 1000-1450 לטווח 1550-2000
-     midSpeed = map(valMiddle, 1500, 1000, 1500, 1900); 
-  } 
-  else if (valMiddle > (1500 + PWM_DEADZONE)) {
-     // סטיק ימינה (ערך גבוה) -> סע אחורה
-     // ממירים את הטווח 1550-2000 לטווח 1450-1100
-     midSpeed = map(valMiddle, 1500, 2000, 1500, 1100);
+  // --- DEBUG TOOL ---
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 200) {
+    Serial.print("Mode: "); Serial.print(chMode > 1500 ? "AUTO" : "MANUAL");
+    Serial.print(" | Mid Stick: "); Serial.println(chMiddle);
+    lastPrint = millis();
   }
 
-  escMiddle.writeMicroseconds(midSpeed);
+  if (chMode > 1500) {
+    runAutonomousLoop();
+  } else {
+    runManualLoop(chServo, chMain, chMiddle);
+  }
+}
+
+void runManualLoop(int inServo, int inMain, int inMiddle) {
+  
+  // 1. Main Motors
+  int mainPWM = inMain;
+  
+  if (abs(mainPWM - 1500) < DEADZONE) {
+    mainPWM = 1500;
+  } else {
+    if (mainPWM > 1500) {
+       mainPWM = map(mainPWM, 1500, 2000, 1500, 1500 + (500 * MANUAL_LIMIT_PCT / 100));
+    } else {
+       mainPWM = map(mainPWM, 1500, 1000, 1500, 1500 - (500 * MANUAL_LIMIT_PCT / 100));
+    }
+  }
+
+  escLeft.writeMicroseconds(mainPWM);
+  escRight.writeMicroseconds(mainPWM);
+
+  // 2. Servo / Steering
+  int cleanInput = constrain(inServo, STICK_MIN, STICK_MAX);
+  int servoAngle = map(cleanInput, STICK_MIN, STICK_MAX, ANGLE_TURN_LEFT, ANGLE_TURN_RIGHT);
+  myServo.write(servoAngle);
+
+  // 3. Middle Motor (Manual)
+  int midPWM = 1500;
+  if (inMiddle > (1500 + DEADZONE)) { 
+    midPWM = map(inMiddle, 1500, 2000, 1500, 1500 - (400 * MANUAL_LIMIT_PCT / 100)); 
+  } 
+  else if (inMiddle < (1500 - DEADZONE)) {
+    midPWM = map(inMiddle, 1500, 1000, 1500, 1500 + (400 * MANUAL_LIMIT_PCT / 100)); 
+  }
+  escMiddle.writeMicroseconds(midPWM);
 }
 
 void runAutonomousLoop() {
@@ -137,27 +138,38 @@ void runAutonomousLoop() {
 
     switch (cmd) {
       case 'F': // Forward
-        escLeft.writeMicroseconds(1600);
-        escRight.writeMicroseconds(1600);
+        escLeft.writeMicroseconds(AUTO_SPEED_FWD); 
+        escRight.writeMicroseconds(AUTO_SPEED_FWD); 
         break;
-      case 'B': // Back
-        escLeft.writeMicroseconds(1400);
-        escRight.writeMicroseconds(1400);
+      
+      case 'B': // Backward
+        escLeft.writeMicroseconds(AUTO_SPEED_REV); 
+        escRight.writeMicroseconds(AUTO_SPEED_REV); 
         break;
+      
+      case 'L': // Rudder Left
+        myServo.write(ANGLE_TURN_LEFT); 
+        break;
+      
+      case 'R': // Rudder Right
+        myServo.write(ANGLE_TURN_RIGHT); 
+        break;
+      
+      case 'Z': // Rotate LEFT (Middle Motor)
+        escMiddle.writeMicroseconds(AUTO_ROT_LEFT_PWM); 
+        break;
+
+      case 'X': // Rotate RIGHT (Middle Motor)
+        escMiddle.writeMicroseconds(AUTO_ROT_RIGHT_PWM); 
+        break;
+      
       case 'S': // Stop
-        stopAll();
+        stopAll(); 
         break;
-      case 'L': // Left
-        myServo.write(SERVO_LEFT);
-        // אופציה: הפעלת מנוע אמצעי לעזרה בסיבוב
-        // escMiddle.writeMicroseconds(1700); 
-        break;
-      case 'R': // Right
-        myServo.write(SERVO_RIGHT);
-        break;
+      
       case 'C': // Center
-        myServo.write(90);
-        escMiddle.writeMicroseconds(1500);
+        myServo.write(ANGLE_CENTER); 
+        escMiddle.writeMicroseconds(1500); 
         break;
     }
   }
@@ -167,5 +179,5 @@ void stopAll() {
   escLeft.writeMicroseconds(1500);
   escRight.writeMicroseconds(1500);
   escMiddle.writeMicroseconds(1500);
-  myServo.write(90);
+  myServo.write(ANGLE_CENTER);
 }
