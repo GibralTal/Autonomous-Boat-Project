@@ -1,72 +1,72 @@
 # Field Operations Manual
 
-This document outlines the standard operating procedures (SOP) for deploying the autonomous surface vehicle (ASV) in a field environment. It covers pre-deployment checks, target calibration, and mission execution.
+This document outlines the standard operating procedures (SOP) for deploying the autonomous surface vehicle (ASV) using the hybrid RC/Jetson control system.
 
 ## 1. Pre-Deployment Checklist
 Ensure all items are verified before transporting the system to the test site.
 
 * **Power Systems:**
-    * Motor LiPo batteries fully charged and voltage balanced.
-    * Jetson power source (Power bank/Battery) fully charged.
-    * Laptop battery charged (for field access).
+    * Motor LiPo batteries fully charged.
+    * Jetson power source fully charged.
+    * **RC Transmitter batteries** charged/replaced.
 * **Hardware Integrity:**
-    * Propellers secured and free of debris.
-    * Waterproof seals and hatches inspected.
-    * USB connections (Arduino, GPS, Camera) secured.
-* **Software:**
-    * Latest code pulled from the repository.
-    * Python dependencies installed (`pyserial`, `pynmea2`).
+    * Propellers secured.
+    * Waterproof seals inspected.
+    * USB connections (Arduino, GPS) secured.
+* **Control Check:**
+    * Verify RC Receiver LED is **RED** (PWM Mode).
+    * Verify Arduino takes manual stick commands when Switch is LOW.
 
 ## 2. Phase 1: Target Acquisition
-To navigate autonomously, the system requires precise GPS coordinates of the target destination (e.g., a buoy).
+To navigate autonomously, the system requires precise GPS coordinates.
 
-1.  **Positioning:** Physically move the vessel (or the GPS unit) to the desired target location.
+1.  **Positioning:** Move the vessel to the desired target location.
 2.  **Data Collection:**
-    * Connect via SSH or terminal.
-    * Execute the coordinate tool:
+    * Execute the GPS tool on the Jetson:
         ```bash
         sudo python3 gps_test.py
         ```
-3.  **Logging:** Wait for a valid GPS lock (non-zero values). Record the `LATITUDE` and `LONGITUDE` values displayed on the console.
+3.  **Logging:** Record the `LATITUDE` and `LONGITUDE`.
 
 ## 3. Phase 2: Mission Configuration
-Update the navigation logic with the coordinates obtained in Phase 1.
+Update the navigation logic with the coordinates obtained.
 
 1.  **Edit Configuration:**
-    Open the main navigation script:
     ```bash
     nano simple_gps_nav.py
     ```
 2.  **Update Waypoints:**
-    Locate the configuration section at the top of the file. Replace the existing values with the new coordinates:
+    Replace existing coordinates:
     ```python
-    # Mission Configuration
     TARGET_LAT = 32.123456
     TARGET_LON = 34.987654
     ```
-3.  **Save:** Press `Ctrl+O`, `Enter`, then `Ctrl+X` to save and exit.
+3.  **Save:** `Ctrl+O`, `Enter`, `Ctrl+X`.
 
 ## 4. Phase 3: Mission Launch
-**Safety Warning:** Ensure all personnel are clear of the propellers before arming the system.
+**Safety Warning:** Keep hands clear of propellers.
 
 1.  **Initialization:**
-    * Place the boat in the water at the Start Point.
-    * Connect the main LiPo battery to the ESCs.
-    * Listen for the ESC initialization tone.
-2.  **Execution:**
-    Run the autonomous navigation mission:
-    ```bash
-    sudo python3 simple_gps_nav.py
-    ```
-3.  **Monitoring:**
-    Monitor the terminal output for telemetry:
-    * Distance to target (meters).
-    * Heading error and steering corrections.
-    * System status.
+    * Turn on the **RC Transmitter**.
+    * Set **Switch (CH5)** to **LOW (Manual Mode)**.
+    * Connect the main LiPo battery to the boat.
+    * Verify manual control (Left Stick moves motors/servo).
+2.  **Arming:**
+    * Place the boat in the water.
+    * Run the Python script on the Jetson:
+        ```bash
+        sudo python3 simple_gps_nav.py
+        ```
+3.  **Engagement:**
+    * Toggle **Switch (CH5)** to **HIGH (Autonomous Mode)**.
+    * The boat should now respond to the Python script commands.
 
 ## 5. Emergency Procedures
-In the event of erratic behavior or immediate danger:
+In the event of erratic behavior or collision risk:
 
-* **Software Abort:** Press `Ctrl+C` in the terminal to terminate the Python script immediately.
-* **Manual Override (If RC connected):** Toggle the safety switch on the RC transmitter to disengage the autonomous controller.
-* **Physical Recovery:** Use the safety tether to retrieve the vessel manually.
+* **IMMEDIATE MANUAL OVERRIDE:**
+    Toggle the RC Switch (CH5) to **LOW**. This instantly cuts off the Jetson's control and returns full authority to the pilot sticks.
+* **Software Abort:**
+    If connected via terminal, press `Ctrl+C`.
+* **Physical Recovery:**
+    Use manual control to bring the boat back to shore.
