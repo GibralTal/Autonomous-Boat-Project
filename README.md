@@ -1,30 +1,39 @@
 # Autonomous Boat Control System
 
-This project implements a control and navigation system for an autonomous surface vessel. It uses a **Master-Slave architecture**:
-* **Master (Jetson Orin):** Handles GPS navigation, path planning, and logic.
-* **Slave (Arduino Nano 33 IoT):** Actuates motors and servos based on serial commands.
+This project implements a hybrid control and navigation system for an autonomous surface vessel. It uses a **Master-Slave architecture** combined with a manual **RC Override**:
+* **Master (Jetson Orin):** Handles GPS navigation, path planning, and sends logic commands.
+* **Slave (Arduino Nano 33 IoT):** Actuates motors and servos based on either RC input or Jetson commands.
+* **RC Controller:** Provides manual control and a physical safety switch for mode selection.
 
 ## System Architecture
 
 ### Hardware Flow
-`[GPS Satellite]` -> `[USB GPS Receiver]` -> **Jetson Orin** -> `[USB Serial]` -> **Arduino Nano** -> `[ESCs & Servos]`
+1.  **Manual Mode:** `[RC Transmitter]` -> `[RC Receiver]` -> **Arduino** -> `[ESCs & Servos]`
+2.  **Auto Mode:** `[GPS]` -> **Jetson Orin** -> `[USB Serial]` -> **Arduino** -> `[ESCs & Servos]`
 
-### Logic
-* **High Level (Python):** Reads NMEA data from the GPS, calculates the heading error to the target waypoint, and sends steering commands (`L`, `R`, `C`) and throttle (`F`) to the Arduino.
-* **Low Level (C++):** Maps received characters to PWM signals for the hardware.
+### Logic & Safety
+The system state is determined by **Channel 5** on the RC Transmitter:
+* **Switch LOW (Manual):** The Arduino ignores the Jetson and follows the pilot's stick inputs directly.
+* **Switch HIGH (Autonomous):** The Arduino listens to serial commands from the Jetson (Python script).
 
 ## Hardware Connection (Pinout)
 
-### Actuators (Connected to Arduino)
-Based on `boat_firmware.ino` and circuit diagram:
+### Actuators (Outputs)
 * **Left Motor (ESC):** Pin `D9`
 * **Right Motor (ESC):** Pin `D10`
-* **Back Motor (ESC):** Pin `D8`
+* **Middle/Back Motor (ESC):** Pin `D8`
 * **Steering Servo:** Pin `D3`
 
-### Sensors
-* **GPS Module:** U-blox USB GPS connected to Jetson USB port (mapped to `/dev/ttyACM1`).
-* **Communication:** Arduino connected to Jetson USB port (mapped to `/dev/ttyACM0`).
+### RC Receiver Inputs (RadioLink R8EF - Red LED/PWM Mode)
+Connect the signal pins from the receiver to the Arduino Analog pins:
+* **CH 4 (Left Stick Horizontal):** Pin `A0` (Steering)
+* **CH 2 (Left Stick Vertical):** Pin `A1` (Main Throttle)
+* **CH 1 (Right Stick Horizontal):** Pin `A2` (Middle Motor)
+* **CH 5 (2-Way Switch):** Pin `A3` (Mode Select)
+
+### Sensors & Compute
+* **GPS Module:** U-blox USB GPS connected to Jetson.
+* **Communication:** Arduino connected to Jetson via USB (`/dev/ttyACM0`).
 
 ## Software Prerequisites
 
@@ -36,7 +45,8 @@ Based on `boat_firmware.ino` and circuit diagram:
     ```
 
 ### 2. Arduino Nano (Firmware)
-* **Board Manager:** Arduino Nano 33 IoT
+* **Board:** Arduino Nano 33 IoT
+* **Firmware Version:** V22 (Full Speed Autonomous)
 * **Libraries:** `Servo.h` (Built-in)
 
 ## Installation & Setup
@@ -44,52 +54,47 @@ Based on `boat_firmware.ino` and circuit diagram:
 1.  **Flash the Firmware:**
     * Open `boat_firmware.ino` in Arduino IDE.
     * Connect the Arduino Nano via USB.
-    * Select the correct board and port.
-    * Upload the code.
+    * Upload the V22 code.
+    * **Calibration:** Verify servo angles and motor directions in `runManualLoop`.
 
 2.  **Configure the Jetson:**
     * Clone this repository.
-    * Verify USB permissions (you might need `sudo` or add your user to the `dialout` group).
-    * Verify device paths:
-        * Arduino is usually `/dev/ttyACM0`.
-        * GPS is usually `/dev/ttyACM1`.
-    * *Note: If ports differ, update `GPS_PORT` and `ARDUINO_PORT` variables in the Python scripts.*
+    * Verify device paths (Arduino is usually `/dev/ttyACM0`).
 
 ## Usage
 
-The system has two modes of operation, ran by separate scripts.
-
-### Mode A: Manual Control (Keyboard)
-Use this for testing motors and steering manually.
-1.  Run the controller:
-    ```bash
-    sudo python3 boat_controller.py
-    ```
-2.  **Controls:**
-    * `F` - Forward
-    * `B` - Backward
-    * `L` / `R` - Turn Left / Right
-    * `C` - Center Steering
-    * `S` - Stop
-    * `Q` - Quit
+### Mode A: Manual Control (RC)
+This is the default safety mode.
+1.  Turn on the RC Transmitter.
+2.  **Toggle Switch (CH5)** to the **LOW** position.
+3.  Use the **Left Stick** for Throttle and Steering.
+4.  Use the **Right Stick** for the Middle Motor (Strafe/Rotate).
 
 ### Mode B: Autonomous Navigation (GPS)
-Use this for waypoint missions.
-1.  **Set Target:** Open `simple_gps_nav.py` and edit the configuration section:
+1.  **Set Target:** Edit `simple_gps_nav.py`:
     ```python
-    TARGET_LAT = 32.085300  # Your Target Latitude
-    TARGET_LON = 34.781800  # Your Target Longitude
+    TARGET_LAT = 32.085300
+    TARGET_LON = 34.781800
     ```
-2.  **Launch Mission:**
+2.  **Launch:**
+    * Place boat in water.
+    * **Toggle Switch (CH5)** to the **HIGH** position (Auto Mode).
+    * Run the script:
     ```bash
     sudo python3 simple_gps_nav.py
     ```
-3.  **Behavior:**
-    * The script prints the distance and heading to the target.
-    * It automatically steers (`L`/`R`/`C`) to face the target.
-    * It stops (`S`) when within `DISTANCE_THRESHOLD` (5 meters).
+
+### Serial Control Protocol
+When in Autonomous Mode, the Arduino accepts these characters:
+* `F` - Forward (Max Speed)
+* `B` - Backward (Max Speed)
+* `L` - Turn Left (Servo Max Angle)
+* `R` - Turn Right (Servo Min Angle)
+* `C` - Center Steering & Stop Middle Motor
+* `Z` - Rotate Left (Middle Motor only)
+* `X` - Rotate Right (Middle Motor only)
+* `S` - Stop All Motors
 
 ## Safety
-* **Always test props-off first.**
-* The `S` command acts as an emergency stop in manual mode.
-* In autonomous mode, use `Ctrl+C` to kill the script (Note: The Arduino handles the last command received, so ensure to kill power or send a stop signal if needed).
+* **Emergency Stop:** Immediately toggle the RC Switch (CH5) to **LOW** to regain manual control.
+* **Prop Safety:** Always test with propellers removed or on a stand.
